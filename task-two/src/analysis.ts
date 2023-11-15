@@ -1,75 +1,52 @@
 import fs from 'fs';
 import EmailValidator from 'email-validator';
 
-/**
- * First task - Read the csv files in the inputPath and analyse them
- *
- * @param {string[]} inputPaths An array of csv files to read
- * @param {string} outputPath The path to output the analysis
- */
-interface results {
-  'valid-domains': string[];
+interface AnalysisResult {
+  validDomains: string[];
   totalEmailsParsed: number;
   totalValidEmails: number;
-  categories: Record<string, number>;
+  domainOccurrences: Record<string, number>;
 }
 
 function analyseFiles(inputPaths: string[], outputPath: string) {
-  let email = '';
-  let emailArr: string[] = [];
-  const trueEmailArr: string[] = [];
-  const validEmailArr: string[] = [];
-  const validDomainsArr: string[] = [];
-  let domainNamesFreq: Record<string, number>;
-  const ValidDomainsArr: string[] = [];
-  inputPaths.forEach((x) => {
-    fs.readFile(x, 'utf-8', (err, data) => {
-      for (const mail of data) {
-        email += mail;
+  const allEmails: string[] = [];
+  const validEmails: string[] = [];
+  const validDomains: string[] = [];
+  const domainOccurrences: Record<string, number> = {};
+
+  inputPaths.forEach((filePath) => {
+    const fileData = fs.readFileSync(filePath, 'utf-8');
+    const emails = fileData.split('\n').slice(1, -1); // Assuming CSV has a header and one email per line
+
+    allEmails.push(...emails);
+
+    emails.forEach((email) => {
+      if (EmailValidator.validate(email)) {
+        validEmails.push(email);
+        const [, domain] = email.split('@');
+        validDomains.push(domain);
+
+        domainOccurrences[domain] = (domainOccurrences[domain] || 0) + 1;
       }
-      email = email.toString();
-      emailArr = email.split('\n');
-      for (let i = 1; i < emailArr.length - 1; i++) {
-        trueEmailArr.push(emailArr[i]);
-      }
-
-      trueEmailArr.forEach((y) => {
-        if (EmailValidator.validate(y) === true) {
-          validEmailArr.push(y);
-        }
-      });
-      for (let j = 0; j < validEmailArr.length; j++) {
-        const splitValid = validEmailArr[j].split('@');
-        validDomainsArr.push(splitValid[1]);
-      }
-      domainNamesFreq = {};
-      validDomainsArr.forEach((z) => {
-        if (domainNamesFreq[z]) {
-          domainNamesFreq[z]++;
-        } else domainNamesFreq[z] = 1;
-      });
-
-      const uniqueValidDomainsArr = Array.from(
-        new Set<string>(validDomainsArr),
-      );
-
-      const result: results = {
-        'valid-domains': [],
-        totalEmailsParsed: 0,
-        totalValidEmails: 0,
-        categories: {},
-      };
-      result['valid-domains'] = uniqueValidDomainsArr;
-      result.totalEmailsParsed = trueEmailArr.length;
-      result.totalValidEmails = validEmailArr.length;
-      result.categories = domainNamesFreq;
-
-      console.log(result);
-      fs.writeFile(outputPath, JSON.stringify(result), 'utf-8', (err) => {
-        if (err) console.log(err);
-        else console.log('result saved');
-      });
     });
+  });
+
+  const uniqueValidDomains = Array.from(new Set(validDomains));
+
+  const result: AnalysisResult = {
+    validDomains: uniqueValidDomains,
+    totalEmailsParsed: allEmails.length,
+    totalValidEmails: validEmails.length,
+    domainOccurrences,
+  };
+
+  fs.writeFile(outputPath, JSON.stringify(result, null, 2), 'utf-8', (err) => {
+    if (err) {
+      console.error(err);
+    } else {
+      console.log(result); //outputs result to the console.
+      console.log('Result saved to', outputPath);
+    }
   });
 }
 
